@@ -4,7 +4,7 @@
 #include <unistd.h>
 #include <sys/epoll.h>
 #include <string.h>
-
+#include <arpa/inet.h>
 
 const int PORT = 8000;
 const int MAX_EVENTS = 10;
@@ -80,9 +80,33 @@ int main() {
 
 	ev.events = EPOLLIN;
 	ev.data.fd = client_fd;
+        if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_fd, &ev) == -1) {
+          std::cerr << "Failed to add client socket to epoll instance."
+                    << std::endl;
+          close(client_fd);
+	  continue ;
+        }
+
+        std::cout << "Client connected: " << inet_ntoa(client_addr.sin_addr)
+                  << ":" << ntohs(client_addr.sin_port) << std::endl;
+      } else {
+        int client_fd = events[i].data.fd;
+        char buffer[1024];
+
+        ssize_t bytes_received = recv(client_fd, buffer, sizeof(buffer), 0);
+        if (bytes_received <= 0) {
+	  std::cout << "Client disconnected or error occurred." << std::endl;
+	  epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
+          close(client_fd);
+        } else {
+	  send(client_fd, buffer, bytes_received, 0);
+        }
       }
     }
   }
 
+  close(epoll_fd);
+  close(server_fd);  
+  
   return 0;
 }
